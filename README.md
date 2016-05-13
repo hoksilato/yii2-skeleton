@@ -1,54 +1,128 @@
-Yii 2 Advanced Project Template
-===============================
+FAKEOFFAKE Website + CCRM (= CMS + CRM)
+=======================================
 
-Yii 2 Advanced Project Template is a skeleton [Yii 2](http://www.yiiframework.com/) application best for
-developing complex Web applications with multiple tiers.
+One Domain Configuration
+------------------------
 
-The template includes three tiers: front end, back end, and console, each of which
-is a separate Yii application.
+Here are the instructions for configuration of the Apache or Nginx web servers for use multiple applications on the same domain.
 
-The template is designed to work in a team development environment. It supports
-deploying the application in different environments.
+Final frontend URL: http://hahashop.me
+Final backend URL: http://hahashop.me/admin
 
-Documentation is at [docs/guide/README.md](docs/guide/README.md).
-
-[![Latest Stable Version](https://poser.pugx.org/yiisoft/yii2-app-advanced/v/stable.png)](https://packagist.org/packages/yiisoft/yii2-app-advanced)
-[![Total Downloads](https://poser.pugx.org/yiisoft/yii2-app-advanced/downloads.png)](https://packagist.org/packages/yiisoft/yii2-app-advanced)
-[![Build Status](https://travis-ci.org/yiisoft/yii2-app-advanced.svg?branch=master)](https://travis-ci.org/yiisoft/yii2-app-advanced)
-
-DIRECTORY STRUCTURE
--------------------
+- Apache
 
 ```
-common
-    config/              contains shared configurations
-    mail/                contains view files for e-mails
-    models/              contains model classes used in both backend and frontend
-console
-    config/              contains console configurations
-    controllers/         contains console controllers (commands)
-    migrations/          contains database migrations
-    models/              contains console-specific model classes
-    runtime/             contains files generated during runtime
-backend
-    assets/              contains application assets such as JavaScript and CSS
-    config/              contains backend configurations
-    controllers/         contains Web controller classes
-    models/              contains backend-specific model classes
-    runtime/             contains files generated during runtime
-    views/               contains view files for the Web application
-    web/                 contains the entry script and Web resources
-frontend
-    assets/              contains application assets such as JavaScript and CSS
-    config/              contains frontend configurations
-    controllers/         contains Web controller classes
-    models/              contains frontend-specific model classes
-    runtime/             contains files generated during runtime
-    views/               contains view files for the Web application
-    web/                 contains the entry script and Web resources
-    widgets/             contains frontend widgets
-vendor/                  contains dependent 3rd-party packages
-environments/            contains environment-based overrides
-tests                    contains various tests for the advanced application
-    codeception/         contains tests developed with Codeception PHP Testing Framework
+<VirtualHost *:80>
+    ServerName hahashop.me
+    #ErrorLog /dev/null
+    #LogLevel emerg
+    #CustomLog /dev/null combined
+
+    RewriteEngine on
+    # the main rewrite rule for the frontend application
+    RewriteCond %{REQUEST_URI} !^/(backend/web|admin)
+    RewriteRule !^/frontend/web /frontend/web%{REQUEST_URI} [L]
+    # redirect to the page without a trailing slash (uncomment if necessary)
+    #RewriteCond %{REQUEST_URI} ^/admin/$
+    #RewriteRule ^(/admin)/ $1 [L,R=301]
+    # disable the trailing slash redirect
+    RewriteCond %{REQUEST_URI} ^/admin$
+    RewriteRule ^/admin /backend/web/index.php [L]
+    # the main rewrite rule for the backend application
+    RewriteCond %{REQUEST_URI} ^/admin
+    RewriteRule ^/admin(.*) /backend/web$1 [L]
+
+    DocumentRoot /path/to/hahashop
+    <Directory />
+        Options FollowSymLinks
+        AllowOverride None
+        AddDefaultCharset utf-8
+    </Directory>
+    <Directory /path/to/hahashop/frontend/web>
+        RewriteEngine on
+        # if a directory or a file exists, use the request directly
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteCond %{REQUEST_FILENAME} !-d
+        # otherwise forward the request to index.php
+        RewriteRule . index.php
+
+        Order Allow,Deny
+        Allow from all
+    </Directory>
+    <Directory /path/to/hahashop/backend/web/>
+        RewriteEngine on
+        # if a directory or a file exists, use the request directly
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteCond %{REQUEST_FILENAME} !-d
+        # otherwise forward the request to index.php
+        RewriteRule . index.php
+
+        Order Allow,Deny
+        Allow from all
+    </Directory>
+    <FilesMatch \.(htaccess|htpasswd|svn|git)>
+        Deny from all
+        Satisfy All
+    </FilesMatch>
+</VirtualHost>
+```
+
+- Nginx
+
+```
+server {
+    listen       80; # listen for IPv4
+    #listen       [::]:80 ipv6only=on; # listen for IPv6
+    server_name  hahashop.me;
+    root         /path/to/hahashop;
+
+    #access_log   off;
+    #error_log    /dev/null crit;
+    charset      utf-8;
+    client_max_body_size  100M;
+
+    location / {
+        root  /path/to/hahashop/frontend/web;
+        try_files  $uri /frontend/web/index.php?$args;
+    }
+
+    location ~* \.php$ {
+        try_files  $uri /frontend/web$uri =404;
+        # check the www.conf file to see if PHP-FPM is listening on a socket or a port
+        fastcgi_pass  unix:/run/php-fpm/php-fpm.sock; # listen for socket
+        #fastcgi_pass  127.0.0.1:9000; # listen for port
+        include  /etc/nginx/fastcgi_params;
+        fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+
+    # avoid processing of calls to non-existing static files by Yii (uncomment if necessary)
+    #location ~* \.(css|js|jpg|jpeg|png|gif|bmp|ico|mov|swf|pdf|zip|rar)$ {
+    #    access_log  off;
+    #    log_not_found  off;
+    #    try_files  $uri /frontend/web$uri =404;
+    #}
+
+    location ~* \.(htaccess|htpasswd|svn|git) {
+        deny all;
+    }
+
+    location /admin {
+        alias  /path/to/hahashop/backend/web;
+        try_files  $uri /backend/web/index.php?$args;
+
+        # redirect to the page without a trailing slash (uncomment if necessary)
+        #location = /admin/ {
+        #    return  301 /admin;
+        #}
+
+        location ~* ^/admin/(.+\.php)$ {
+            try_files  $uri /backend/web/$1?$args;
+        }
+
+        # avoid processing of calls to non-existing static files by Yii (uncomment if necessary)
+        #location ~* ^/admin/(.+\.(css|js|jpg|jpeg|png|gif|bmp|ico|mov|swf|pdf|zip|rar))$ {
+        #    try_files  $uri /backend/web/$1?$args;
+        #}
+    }
+}
 ```
