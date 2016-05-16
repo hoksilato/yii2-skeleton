@@ -126,3 +126,20 @@ server {
     }
 }
 ```
+
+Web Application Installation
+----------------------------
+
+- Composer Install/Update
+
+```
+composer update --prefer-dist
+```
+
+- Change configuration in `common/main-local.php`
+
+- Run migrations
+
+```
+./yii migrate/up --migrationPath=@vendor/dektrium/yii2-user/migrations
+```
